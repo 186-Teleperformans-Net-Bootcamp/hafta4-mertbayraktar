@@ -1,10 +1,12 @@
 using System.Text;
+using MertBayraktar.Social.Network.Api;
 using MertBayraktar.Social.Network.Api.Data;
 using MertBayraktar.Social.Network.Api.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -33,7 +35,7 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = configuration["JWT:Audience"],
         ValidIssuer = configuration["JWT:Issuer"],
         ValidateLifetime = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JWT:SecretKey"]))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JWT:Key"]))
     };
 }
 );
@@ -60,6 +62,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthorization();
+app.UseAuthentication();
 
 app.MapControllers();
 

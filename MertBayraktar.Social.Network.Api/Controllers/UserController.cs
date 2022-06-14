@@ -7,6 +7,7 @@ using MertBayraktar.Social.Network.Api.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
@@ -33,88 +34,25 @@ namespace MertBayraktar.Social.Network.Api.Controllers
         }
         //Cache işlemi
         [HttpGet("GetUserFriendsCache")]
-        [ResponseCache(Duration =2000,VaryByHeader ="Friendship",VaryByQueryKeys = new string[] {"frienshipId"})]
-         public IEnumerable<Friendship> GetFriendship(int friendshipId)
+        public async Task<IActionResult> GetAllUsersByMemoryCache()
         {
-
-            Friendship[] friendships = _db.Friendships.Where(f => f.Id == friendshipId).ToArray();
-            
-            if (_memoryCache.TryGetValue("friendships", out friendships))
+            if (!_memoryCache.TryGetValue("userList", out List<User> users))
             {
-                return friendships;
-            }
-            var friendshipByts = _distributedCache.Get("friendships");
-            var friendshipJson = Encoding.UTF8.GetString(friendshipByts);
-            var friendshipArr = JsonSerializer.Deserialize<Friendship[]>(friendshipJson);
+                users = await _db.Users.ToListAsync();
 
-            MemoryCacheEntryOptions memoryCacheEntryOptions = new MemoryCacheEntryOptions();
-            memoryCacheEntryOptions.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
-            memoryCacheEntryOptions.SlidingExpiration = TimeSpan.FromMinutes(30);
-            memoryCacheEntryOptions.Priority = CacheItemPriority.High;
-
-            _memoryCache.Set("friendships", friendships, memoryCacheEntryOptions);
-
-            var distFriendshipsArr = JsonSerializer.Serialize(friendships);
-
-            _distributedCache.Set("friendships", Encoding.UTF8.GetBytes(distFriendshipsArr));
-            return friendships;
-        }
-       
-        //Token işlemi
-        [HttpPost]
-        public async Task<IActionResult> Login([FromBody] User users)
-        {
-            List<Claim> claims = new List<Claim>();
-            var user = await _userManager.FindByEmailAsync(users.Email);
-            if (user == null) throw new Exception("Kullanıcı Bulunamadı");
-
-            var result = await _userManager.CheckPasswordAsync(user, users.PasswordHash);
-            if (result)
-            {
-
-                var roles = await _userManager.GetRolesAsync(user);
-                foreach (var role in roles)
+                var cacheEntryOptions = new MemoryCacheEntryOptions
                 {
-                    claims.Add(new Claim(ClaimTypes.Role, role));
-                }
-
-                claims.Add(new Claim(ClaimTypes.Name, user.Email));
-                claims.Add(new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()));
-
-                var token = GetToken(claims);
-
-                var handler = new JwtSecurityTokenHandler();
-                string jwt = handler.WriteToken(token);
-
-                return Ok(new
-                {
-                    token = jwt,
-                    expiration = token.ValidTo
-                });
-            }
-
-            return Unauthorized();
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1),
+                    SlidingExpiration = TimeSpan.FromSeconds(45),
+                    Priority = CacheItemPriority.Normal
+                };
+                _memoryCache.Set("userList", users, cacheEntryOptions);
+            };
+            return Ok(users);
         }
-
-
-        private JwtSecurityToken GetToken(List<Claim> claims)
-        {
-
-            var signinKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Key"]));
-
-            var token = new JwtSecurityToken(
-
-                 signingCredentials: new SigningCredentials(signinKey, SecurityAlgorithms.HmacSha256),
-                 issuer: _configuration["JWT:Issuer"],
-                 audience: _configuration["JWT:Audience"],
-                 expires: DateTime.Now.AddDays(1),
-                 claims: claims
-                );
-
-            return token;
-
-        }
-
     }
 }
 
+            
+
+        
